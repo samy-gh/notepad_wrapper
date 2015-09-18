@@ -73,8 +73,8 @@ WinMain(
 	// コマンドラインを作成
 	//
 	next_arg = (LPTSTR)malloc( (lstrlen(editor_exepath)  + 1 + lstrlen(cmdline) + (argc *2) + 1) * sizeof(TCHAR) );
-	lstrcat( next_arg, TEXT("\"") );
-	lstrcpy( next_arg, editor_exename );
+	lstrcpy( next_arg, TEXT("\"") );
+	lstrcat( next_arg, editor_exename );
 	lstrcat( next_arg, TEXT("\"") );
 	if( lstrlen(editor_cmdopt) > 0 ) {
 		lstrcat( next_arg, TEXT(" ") );
