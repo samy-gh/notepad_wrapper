@@ -5,62 +5,49 @@
 
 static LPTSTR search_open_file_path( LPTSTR cmdline )
 {
-	//
-	// "notepad.exe"をskipする。
-	//
-	for( ; cmdline[0] != L'\0'; cmdline++ ) {
-		if( ((cmdline[ 0] == L'N') || (cmdline[ 0] == L'n'))
-		 && ((cmdline[ 1] == L'O') || (cmdline[ 1] == L'o'))
-		 && ((cmdline[ 2] == L'T') || (cmdline[ 2] == L't'))
-		 && ((cmdline[ 3] == L'E') || (cmdline[ 3] == L'e'))
-		 && ((cmdline[ 4] == L'P') || (cmdline[ 4] == L'p'))
-		 && ((cmdline[ 5] == L'A') || (cmdline[ 5] == L'a'))
-		 && ((cmdline[ 6] == L'D') || (cmdline[ 6] == L'd'))
-		 &&  (cmdline[ 7] == L'.')
-		 && ((cmdline[ 8] == L'E') || (cmdline[ 8] == L'e'))
-		 && ((cmdline[ 9] == L'X') || (cmdline[ 9] == L'x'))
-		 && ((cmdline[10] == L'E') || (cmdline[10] == L'e'))
-		 ) {
-			cmdline += 11;	// notepad.exe
-			break;
+	unsigned int skip_argc = 2;	// Skipする引数の残数
+
+	// オープンするファイル名の先頭を頭出しする
+	// e.g.
+	// "C:\path to notepad_wrapper\notepad_wrapper.exe" "notepad.exe" C:\path to text file.txt
+	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~ ^
+	// 第0引数skip                                      第1引数skip   ここを得る
+
+
+	while( *cmdline != L'\0' ) {
+		// 「"」が来たら、対になる「"」までスキップ
+		if( *cmdline == L'"' ) {
+			for( ; *cmdline != L'\0'; cmdline++ ) {
+				if( *cmdline == L'"' ) {
+					cmdline++;
+					break;
+				}
+			}
+			continue;
 		}
-	}
 
-	if( cmdline[0] == L'\0' ) {
-		return NULL;
-	}
+		if( *cmdline == L' ' ) {
+			// 「 」(space)が来たらskip残数を減らす
+			skip_argc--;
 
+			// 連続したspaceは合わせてskip
+			for( ; *cmdline != L'\0'; cmdline++ ) {
+				if( *cmdline != L' ' ) {
+					break;
+				}
+			}
 
-	//
-	// " "までskipする。
-	//
-	for( ; cmdline[0] != L'\0'; cmdline++ ) {
-		if( cmdline[0] == L' ' ) {
-			cmdline++;
-			break;
+			// skip残数=0になったら、そこがファイル名先頭
+			if( skip_argc == 0 ) {
+				return cmdline;
+			}
+			continue;
 		}
+
+		cmdline++;
 	}
 
-	if( cmdline[0] == L'\0' ) {
-		return NULL;
-	}
-
-
-	for( ; cmdline[0] != L'\0'; cmdline++ ) {
-		if( cmdline[0] != L' ' ) {
-			break;
-		}
-	}
-
-	if( cmdline[0] == L'\0' ) {
-		return NULL;
-	}
-
-#if 0
-	MessageBox( NULL, cmdline, TEXT("dump"), MB_OK );
-#endif
-
-	return cmdline;
+	return NULL;
 }
 
 static LPTSTR create_open_file_path_from_argv( LPTSTR cmdline, int argc, LPTSTR argv[] )
@@ -123,13 +110,22 @@ WinMain(
 	//
 	// "/p"が指定されていた場合、プリンタモードにする
 	//
-	if( (open_file_path[0] == L'/')
-	 && (open_file_path[1] == L'p')
-	 && (open_file_path[2] == L' ')
-	 ) {
-		open_file_path += 3;
+	if( wcsncmp( open_file_path, TEXT("/p "), 3 ) == 0 ) {
+		open_file_path += 3;	// "/p "
+		// " "をskip。
+		for( ; *open_file_path != L'\0'; open_file_path++ ) {
+			if( *open_file_path != L' ' ) {
+				break;
+			}
+		}
 		print_mode = true;
 	}
+	else
+	if( lstrcmp( open_file_path, TEXT("/p") ) == 0 ) {
+		open_file_path += 2;	// "/p"
+		print_mode = true;
+	}
+
 
 	//
 	// このコマンドのiniファイルパスを得る
@@ -140,6 +136,7 @@ WinMain(
 		lstrcpy( ini_path, exe_path );
 		lstrcpy( &ini_path[lstrlen(exe_path) -4], TEXT(".ini") );
 	}
+
 
 	//
 	// iniファイルから次のeditorのコマンドパスと引数を得る
@@ -168,6 +165,7 @@ WinMain(
 			sizeof(editor_print_cmdopt) / sizeof(TCHAR),
 			ini_path);
 
+
 	//
 	// editorコマンドのexeファイル名を得る
 	//
@@ -178,6 +176,7 @@ WinMain(
 		}
 	}
 
+
 	//
 	// コマンドラインを作成
 	//
@@ -185,6 +184,7 @@ WinMain(
 	lstrcpy( next_arg, TEXT("\"") );
 	lstrcat( next_arg, editor_exename );
 	lstrcat( next_arg, TEXT("\"") );
+	// エディタの固定引数を追加。プリントモードかどうかで切り分ける。
 	if( print_mode == false ) {
 		if( lstrlen(editor_cmdopt) > 0 ) {
 			lstrcat( next_arg, TEXT(" ") );
@@ -197,12 +197,24 @@ WinMain(
 			lstrcat( next_arg, editor_print_cmdopt );
 		}
 	}
-	lstrcat( next_arg, TEXT(" \"") );
-	lstrcat( next_arg, open_file_path );
-	lstrcat( next_arg, TEXT("\"") );
+	// オープンするファイル名を追加。「"」で囲まれていない場合は囲む。
+	if( lstrlen(open_file_path) != 0 ) {
+		if( (open_file_path[0] == L'"') && (open_file_path[lstrlen(open_file_path) -1] == L'"') ) {
+			lstrcat( next_arg, TEXT(" ") );
+			lstrcat( next_arg, open_file_path );
+		}
+		else {
+			lstrcat( next_arg, TEXT(" \"") );
+			lstrcat( next_arg, open_file_path );
+			lstrcat( next_arg, TEXT("\"") );
+		}
+	}
+
 
 #if 0
+	MessageBox( NULL, cmdline, TEXT("dump"), MB_OK );
 	MessageBox( NULL, next_arg, TEXT("dump"), MB_OK );
+	MessageBox( NULL, open_file_path, TEXT("dump"), MB_OK );
 	return 0;
 #endif
 
