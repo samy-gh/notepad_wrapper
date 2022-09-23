@@ -1,6 +1,5 @@
 
-call "%VS120COMNTOOLS%\vsvars32.bat"
-set SDK_INCLUDE_DIR="C:\Program Files (x86)\Microsoft SDKs\Windows\v7.1A\Include"
+call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
 
 cl.exe notepad_wrapper.cpp user32.lib shell32.lib
 
